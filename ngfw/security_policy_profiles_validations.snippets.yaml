@@ -1,0 +1,1066 @@
+name: panos_validations_profile_objects
+label: PAN-OS validations for profile objects
+description: PAN-OS validations for profile objects
+type: pan_validation
+
+# checks for security configuration using security profiles and policies
+
+variables:
+
+  - name: url_profile_actions
+    description: list of url profile actions
+    type_hint: hidden
+    default:
+      - block
+      - alert
+      - continue
+      - override
+
+snippets:
+
+  # Ensure 'Antivirus Update Schedule' is set to download and install updates hourly
+  - name: capture_av_update_schedule
+    cmd: parse
+    variable: config
+    outputs:
+      - name: av_update_interval
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/
+          update-schedule/anti-virus/recurring/*[1]
+      - name: av_update_action
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/
+          update-schedule/anti-virus/recurring/hourly/action/text()
+
+  - name: AV_update_schedule
+    label: Ensure 'Antivirus Update Schedule' is set to download and install updates hourly
+    test: |
+      (
+        av_update_interval == 'hourly'
+        and av_update_action == 'download-and-install'
+      )
+    fail_message: |
+      Antivirus Update Schedule is set to {{ av_update_interval }} with action {{ av_update_action }}
+    pass_message: |
+      Antivirus Update Schedule is set to {{ av_update_interval }} with action {{ av_update_action }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-antivirus-update-schedule-is-set-to-download-and-install-updates-hourly
+
+  # Ensure 'Applications and Threats Update Schedule'
+  - name: capture_apps_threats_update_schedule
+    cmd: parse
+    variable: config
+    outputs:
+      - name: threats_update_interval
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/
+          update-schedule/threats/recurring/*[1]
+      - name: threats_update_action
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/
+          update-schedule/threats/recurring//action/text()
+
+  - name: test_apps_threats_updates
+    label: |
+      Ensure 'Applications and Threats Update Schedule' is set to download and install updates
+      at daily or shorter intervals
+    test: |
+      (
+        threats_update_interval in app_threat_intervals
+        and threats_update_action == 'download-and-install'
+      )
+    fail_message: |
+     Applications and Threats Update Schedule is set to {{ threats_update_interval }}
+     with action {{ threats_update_action }}
+    pass_message: |
+      Applications and Threats Update Schedule is set to {{ threats_update_interval }}
+      with action {{ threats_update_action }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-applications-and-threats-update-schedule-is-set-to-download-and-install-updates-at-daily
+      -or-shorter-intervals
+
+  # Ensure that WildFire file size upload limits are maximized
+  - name: capture_wf_size_testing
+    cmd: parse
+    variable: config
+    outputs:
+      - name: wf_file_size_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting/wildfire/
+          file-size-limit/entry
+      - name: wf_filetypes_wo_max_size
+        capture_variable: |-
+          {%- set bad_filetypes = [] %}
+          {%- for item in wf_file_size_object %}
+            {%- set filetype = item['entry']['@name'] %}
+            {%- if item['entry']['size-limit'] | int < wf_file_size_limits[0][filetype] | int %}
+              {%- set _ = bad_filetypes.append(filetype) %}
+            {%- endif %}
+          {%- endfor %}
+          {{ bad_filetypes | to_json }}
+
+  - name:  wf_limit_pe_test
+    label: Ensure that WildFire file size upload limits are maximized
+    test: wf_filetypes_wo_max_size | from_json | length == 0
+    fail_message: |-
+      filetypes not configured to meet max size requirements:
+      {{ wf_filetypes_wo_max_size }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-wildfire-file-size-upload-limits-are-maximized
+
+  # Ensure forwarding is enabled for all applications and file types in WildFire file blocking profiles
+  # inspecting the WF analysis profile and not the file blocking profile
+  - name: capture_wildfire_profile_settings
+    cmd: parse
+    variable: config
+    outputs:
+      - name: wildfire_any_any_profiles
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/
+          wildfire-analysis/entry[rules/entry/application/member='any' or rules/entry/file-type/member='any']/@name
+
+  - name: WF_all_apps_files
+    label: Ensure forwarding is enabled for all applications and file types in WildFire file blocking profiles
+    test: true
+    pass_message: |-
+      This assessment inspects the Wildfire analysis profile
+      File blocking profiles no longer support the action of forward
+
+      Wildfire analysis profiles configured with application=any and filetype=any
+      {{ wildfire_any_any_profiles }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-forwarding-is-enabled-for-all-applications-and-file-types-in-wildfire-file-blocking-profiles
+    meta:
+      - action_required: true
+
+  # Ensure a WildFire Analysis profile is enabled for all security policies
+  - name: capture_wildfire_profile_policies
+    cmd: parse
+    variable: config
+    outputs:
+      # capture for security rules using named profiles instead of a profile group
+      - name: security_rules_without_wf_profile
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry/profile-setting/profiles[count(wildfire-analysis)=0]/../../@name
+      # capture for security rules using profile groups
+      - name: profile_groups_without_wf
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profile-group/
+          entry[count(wildfire-analysis)=0]/@name
+      - name: security_rules_with_group_without_wf_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry
+        filter_items: item | element_value('profile-setting.group.member') in profile_groups_without_wf
+      - name: security_rules_with_group_without_wf_names
+        capture_expression: security_rules_with_group_without_wf_object | map(attribute="entry.@name") | list
+
+  - name: WF_profile_in_policies
+    label: Ensure a WildFire Analysis profile is enabled for all security policies
+    test: |-
+      (
+        security_rules_without_wf_profile | length == 0
+        and security_rules_with_group_without_wf_names | length == 0
+      )
+    fail_message: |-
+      security policies without Wildfire profile:
+      Using explicit profile:
+      {{ security_rules_without_wf_profile }}
+      Using profile group without a Wildfire profile
+      {{ security_rules_with_group_without_wf_names }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-a-wildfire-analysis-profile-is-enabled-for-all-security-policies
+
+  # Ensure forwarding of decrypted content to WildFire is enabled
+  - name: capture_wildfire_allow_forwarding_decrypted_content
+    cmd: parse
+    variable: config
+    outputs:
+      - name: allow_forward_decrypted_content
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/setting/
+          ssl-decrypt/allow-forward-decrypted-content/text()
+
+  - name: WF_forward_decrypt_content
+    label: Ensure forwarding of decrypted content to WildFire is enabled
+    test: allow_forward_decrypted_content == 'yes'
+    fail_message: Forwarding of decrypted content is not enabled
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-forwarding-of-decrypted-content-to-wildfire-is-enabled
+
+  # Ensure all WildFire session information settings are enabled
+  - name: capture_wildfire_session_settings
+    cmd: parse
+    variable: config
+    outputs:
+      - name: wf_session_disabled_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting/
+          wildfire/session-info-select/*[text()='yes']
+
+  - name: WF_session_info_enabled
+    label: Ensure all WildFire session information settings are enabled
+    test: wf_session_disabled_object | length == 0
+    fail_message: |-
+      Session information settings not enabled:
+      {%- for item in wf_session_disabled_object %}
+        {%- for key in item %}
+          {{ key }}
+        {%- endfor %}
+      {%- endfor %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-all-wildfire-session-information-settings-are-enabled
+
+  # Ensure alerts are enabled for malicious files detected by WildFire
+  - name: capture_wildfire_alerts
+    cmd: parse
+    variable: config
+    outputs:
+      - name: log_forwaring_profiles_wf_malicious_alerts
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/log-settings/profiles
+          /entry/match-list/entry[log-type='wildfire' and filter='(verdict neq benign)'
+          and (count(send-email) or count(send-http) or count(send-snmp) or count(send-syslog))]
+
+  - name: WF_alerts_malicious_files
+    label: Ensure alerts are enabled for malicious files detected by WildFire
+    test: log_forwaring_profiles_wf_malicious_alerts
+    fail_message: no log forwarding profiles found matching benchmark criteria
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-alerts-are-enabled-for-malicious-files-detected-by-wildfire
+
+  # Ensure 'WildFire Update Schedule' is set to download and install updates every minute
+  - name: capture_wildfire_update_schedule
+    cmd: parse
+    variable: config
+    outputs:
+      - name: wf_update_schedule_recurring
+        capture_object: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/update-schedule/
+          wildfire[count(recurring) and (count(recurring/real-time) or count(recurring/every-min))]
+
+  - name: WF_update_schedule
+    label: Ensure 'WildFire Update Schedule' is set to download and install updates every minute
+    test: wf_update_schedule_recurring
+    fail_message: Wildfire Update Schedule not configured for one-minute or real-time updates
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-wildfire-update-schedule-is-set-to-download-and-install-updates-every-minute
+
+ # Ensure that antivirus profiles are set to block on all decoders except 'imap' and 'pop3'
+  - name: capture_av_profile_action_settings
+    cmd: parse
+    variable: config
+    outputs:
+      - name: av_profiles_found
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/virus/entry/@name
+      - name: av_profile_block_all_decoders
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/virus/entry
+          /decoder/entry[not(action='reset-both') and not(wildfire-action='reset-both')]/../../@name
+
+  - name: av_profile_block_all_decoders_test
+    label: Ensure that antivirus profiles are set to block on all decoders except 'imap' and 'pop3'
+    test: av_profile_block_all_decoders | length == 0
+    fail_message: |-
+      Antivius profiles failing benchmark test:
+      {{ av_profile_block_all_decoders }}
+    pass_message: |-
+      {%- if not av_profiles_found %}
+      No configured Antivirus profiles found
+      {%- else %}
+      No configured Antivirus profiles violate this benchmark
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-antivirus-profiles-are-set-to-block-on-all-decoders-except-imap-and-pop3
+
+  # Ensure a secure antivirus profile is applied to all relevant security policies
+  - name: capture_av_profile_in_policies
+    cmd: parse
+    variable: config
+    outputs:
+      # capture for security rules using named profiles instead of a profile group
+      - name: security_policies_found
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry/@name
+      - name: security_rules_without_virus_profile
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow' and count(profile-setting/profiles)>0 and count(virus)=0]/@name
+      # capture for security rules using profile groups
+      - name: profile_groups_without_virus
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profile-group/
+          entry[count(virus)=0]/@name
+      - name: security_rules_with_group_without_virus_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow']
+        filter_items: item | element_value('profile-setting.group.member') in profile_groups_without_virus
+      - name: security_rules_with_group_without_virus_names
+        capture_expression: security_rules_with_group_without_virus_object | map(attribute="entry.@name") | list
+
+  - name: AV_profile_in_policies
+    label: Ensure a secure antivirus profile is applied to all relevant security policies
+    test: |-
+      (
+        security_rules_without_virus_profile | length == 0
+        and security_rules_with_group_without_virus_names | length == 0
+      )
+    fail_message: |-
+      security policies without an Antivirus profile:
+      Using explicit profile:
+      {{ security_rules_without_virus_profile }}
+      Using profile group without a virus profile
+      {{ security_rules_with_group_without_virus_names }}
+    pass_message: |-
+      {%- if not security_policies_found %}
+      No configured security policies found
+      {%- else %}
+      No configured security policies violate this benchmark
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-a-secure-antivirus-profile-is-applied-to-all-relevant-security-policies
+
+  # Ensure an anti-spyware profile is configured to block on all spyware severity levels, categories, and threats
+  - name: capture_anti-spyware_profile_settings
+    cmd: parse
+    variable: config
+    outputs:
+      - name: spyware_profiles_found
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry/@name
+      - name: spyware_profile_block_all_category_threat_severity_one_rule
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry[
+          rules/entry/threat-name='any'
+          and (count(rules/entry/action/allow)=0 and count(rules/entry/action/alert)=0 and count(rules/entry/action/default)=0)
+          and rules/entry/severity/member='any'
+          ]/@name
+      - name: spyware_profile_block_all_category_threat_severity_many_rules
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry[
+          rules/entry/threat-name='any'
+          and (count(rules/entry/action/allow)=0 and count(rules/entry/action/alert)=0 and count(rules/entry/action/default)=0)
+          and rules/entry/severity/member='informational' and rules/entry/severity/member='low'
+          and rules/entry/severity/member='medium' and rules/entry/severity/member='high'
+          and rules/entry/severity/member='critical'
+          ]/@name
+
+  - name: spyware_profile_block_all
+    label: |-
+      Ensure an anti-spyware profile is configured to block on all spyware severity levels, categories, and threats
+    test: |-
+      (
+        spyware_profile_block_all_category_threat_severity_one_rule | length
+        or spyware_profile_block_all_category_threat_severity_many_rules | length
+        and spyware_profiles_found | length
+      )
+    fail_message: |-
+      {%- if spyware_profiles_found | length == 0 %}
+      No Anti-Spyware profiles configured
+      {%- else %}
+      No configured Anti-Spyware profiles meet the benchmark criteria
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-an-anti-spyware-profile-is-configured-to-block-on-all-spyware-severity-levels-categories-and-threats
+
+  # Ensure DNS sinkholing is configured on all anti-spyware profiles in use
+  # PAN-OS 9.0 version - does not include the 10.0 DNS categories element
+  - name: capture_dns_sinkhole_configuration
+    cmd: parse
+    variable: config
+    outputs:
+      - name: spyware_profiles_found
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry/@name
+      # output pre 10.0 before categories available
+      - name: spyware_profiles_without_sinkhole_no_category
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry[count(botnet-domains/lists/entry/action/sinkhole)=0]/@name
+      # 10.0 and later support leveraging categories
+      # sinkhole known malicious categories:
+      - name: spyware_profiles_without_sinkhole_category
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry/botnet-domains/dns-security-categories/entry[
+          (@name='pan-dns-sec-malware' or @name='pan-dns-sec-cc')
+          and action!='sinkhole']/../../../@name
+
+  - name: DNS_sinkhole_configured
+    label: Ensure DNS sinkholing is configured on all anti-spyware profiles in use
+    test: |-
+      (
+        spyware_profiles_without_sinkhole_no_category | length == 0
+        and spyware_profiles_without_sinkhole_category | length == 0
+      )
+    fail_message: |-
+      The following Anti-Spyware profiles are not correctly configured with DNS sinkholing:
+      {%- if spyware_profiles_without_sinkhole_no_category | length %}
+       Non-category DNS policies:
+       {{ spyware_profiles_without_sinkhole_no_category }}
+      {%- endif %}
+      {%- if spyware_profiles_without_sinkhole_category | length %}
+       Category-based DNS policies:
+       {{ spyware_profiles_without_sinkhole_category }}
+      {%- endif %}
+    pass_message: |-
+      {%- if spyware_profiles_found %}
+      Benchmark criteria met
+      {%- else %}
+      No Anti-Spyware profiles are configured
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-dns-sinkholing-is-configured-on-all-anti-spyware-profiles-in-use
+
+  # Ensure passive DNS monitoring is set to enabled on all anti-spyware profiles in use
+  # this moved to a telemetry configuration option in 9.x
+  # passive DNS and telemetry configuration will change in PAN-OS 10.0
+  - name: capture_passive_dns_monitoring
+    cmd: parse
+    variable: config
+    outputs:
+      - name: spyware_profiles_found
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/spyware/
+          entry/@name
+      - name: telemetry_passive_dns_monitoring
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/update-schedule/statistics-service/
+          passive-dns-monitoring/text()
+
+  - name: enable_passive_DNS_monitoring
+    label: Ensure passive DNS monitoring is set to enabled on all anti-spyware profiles in use
+    test: telemetry_passive_dns_monitoring != 'no'
+    fail_message: Passive DNS monitoring is not currently enabled
+    pass_message: |-
+      {%- if spyware_profiles_found %}
+      Benchmark criteria met
+      {%- else %}
+      No Anti-Spyware profiles are configured
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-passive-dns-monitoring-is-set-to-enabled-on-all-anti-spyware-profiles-in-use
+
+  # Ensure a secure anti-spyware profile is applied to all security policies permitting traffic to the Internet
+  - name: capture_antispyware_profiles_in_policies
+    cmd: parse
+    variable: config
+    outputs:
+      # capture for security rules using named profiles instead of a profile group
+      - name: security_rules_without_spyware_profile
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow' and count(profile-setting/profiles)>0 and count(spyware)=0]/@name
+      # capture for security rules using profile groups
+      - name: profile_groups_without_spyware
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profile-group/
+          entry[count(spyware)=0]/@name
+      - name: security_rules_with_group_without_spyware_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow']
+        filter_items: item | element_value('profile-setting.group.member') in profile_groups_without_spyware
+      - name: security_rules_with_group_without_spyware_names
+        capture_expression: security_rules_with_group_without_spyware_object | map(attribute="entry.@name") | list
+
+  - name: spyware_profile_in_policies
+    label: Ensure a secure anti-spyware profile is applied to all security policies permitting traffic to the Internet
+    test: |-
+      (
+        security_rules_without_spyware_profile | length == 0
+        and security_rules_with_group_without_spyware_names | length == 0
+      )
+    fail_message: |-
+      security policies without Anti-Spyware profile:
+      Using explicit profile:
+      {{ security_rules_without_spyware_profile }}
+      Using profile group without a Anti-Spyware profile
+      {{ security_rules_with_group_without_spyware_names }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-a-secure-anti-spyware-profile-is-applied-to-all-security-policies-permitting-traffic-to-the-internet
+
+  # Ensure a Vulnerability Protection Profile is set to block attacks against critical and high vulnerabilities,
+  # and set to default on medium, low, and informational vulnerabilities
+  #
+  # Not default, allow, alert for critical or high severity
+  # Not allow/alert for medium/low/info severity
+  - name: capture_vulnerability_profile_rules
+    cmd: parse
+    variable: config
+    outputs:
+      - name: vulnerability_profile_object
+        capture_object: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/vulnerability/entry
+      - name: vulnerability_profile_blockAll
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/vulnerability/entry
+          [rules/entry/severity/member='any' and count(rules/entry/action/alert)=0 and
+          count(rules/entry/action/default)=0 and count(rules/entry/action/allow)=0]/@name
+
+  - name: vulnerability_profile_blocking
+    label: |
+      Ensure a Vulnerability Protection Profile is set to block attacks against critical and high vulnerabilities,
+      and set to default on medium, low, and informational vulnerabilities
+    test: true
+    pass_message: Roadmap item to work through all of the rule configuration scenarios
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-a-vulnerability-protection-profile-is-set-to-block-attacks-against-critical-and-high-vulnerabilities
+      -and-set-to-default-on-medium-low-and-informational-vulnerabilities
+    meta:
+      - implemented: false
+      - action_required: true
+
+  # Ensure a secure Vulnerability Protection Profile is applied to all security rules allowing traffic
+  - name: capture_vulnerability_profile_policies
+    cmd: parse
+    variable: config
+    outputs:
+      # capture for security rules using named profiles instead of a profile group
+      - name: security_rules_without_vulnerability_profile
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow' and count(profile-setting/profiles)>0 and count(vulnerability)=0]/@name
+      # capture for security rules using profile groups
+      - name: profile_groups_without_vulnerability
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profile-group/
+          entry[count(vulnerability)=0]/@name
+      - name: security_rules_with_group_without_vulnerability_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow']
+        filter_items: item | element_value('profile-setting.group.member') in profile_groups_without_vulnerability
+      - name: security_rules_with_group_without_vulnerability_names
+        capture_expression: security_rules_with_group_without_vulnerability_object | map(attribute="entry.@name") | list
+
+  - name: vulnerability_profile_in_policies
+    label: Ensure a secure Vulnerability Protection Profile is applied to all security rules allowing traffic
+    test: |-
+      (
+        security_rules_without_vulnerability_profile | length == 0
+        and security_rules_with_group_without_vulnerability_names | length == 0
+      )
+    fail_message: |-
+      security policies without Vulnerability profile:
+      Using explicit profile:
+      {{ security_rules_without_vulnerability_profile }}
+      Using profile group without a Vulnerability profile
+      {{ security_rules_with_group_without_vulnerability_names }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-a-secure-vulnerability-protection-profile-is-applied-to-all-security-rules-allowing-traffic
+
+  # Ensure that PAN-DB URL Filtering is used
+  # this is an operational command requiring API access to the device
+  - name: capture_url_license_info
+    cmd: cli
+    # This cli command will return xml
+    cmd_str: request license info
+    output_type: xml
+    outputs:
+      - name: logging_service_URL
+        capture_value: ./entry/feature[text()="PAN-DB URL Filtering"]/../expired/text()
+
+  - name: pandb_url_filtering
+    label: Ensure that PAN-DB URL Filtering is used
+    test: logging_service_URL == 'no'
+    fail_message: PAN-DB license is not used or inactive
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-that-pan-db-url-filtering-is-used
+
+  # Ensure that URL Filtering uses the action of “block” or “override” on the URL categories
+  # TODO: requires user selection for 'categories of interest'
+  - name: capture_url_filtering_block_override
+    cmd: parse
+    variable: config
+    outputs:
+      - name: url_profiles_found
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/url-filtering
+          /entry/@name
+      - name: url_filtering_object
+        capture_object: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/url-filtering/entry
+      - name: url_filtering_block_override
+        capture_variable: |-
+          {%- set profiles_block_override = dict() %}
+          {%- set actions = ['block', 'override'] %}
+          {%- for item in url_filtering_object %}
+            {%- set entry_dict = dict() %}
+            {%- for action in actions %}
+              {%- if item['entry'][action] %}
+                {%- set configured_categories = [] %}
+                {%- if item['entry'][action][1] %}
+                  {%- for category in item['entry'][action]['member'] %}
+                    {%- set _ = configured_categories.append(category) %}
+                  {%- endfor %}
+                {%- else %}
+                    {%-  set _ = configured_categories.append(item['entry'][action]['member']) %}
+                {%- endif %}
+                {%- if configured_categories | length %}
+                  {%- set _ = entry_dict.update({ action: configured_categories }) %}
+                {%- endif %}
+              {%- endif %}
+            {%- endfor %}
+            {%- set _ = profiles_block_override.update({ item['entry']['@name']: entry_dict }) %}
+          {%- endfor %}
+          {{ profiles_block_override | to_json }}
+
+  - name: url_filtering_block_or_override_test
+    label: Ensure that URL Filtering uses the action of “block” or “override” on the URL categories
+    test: true
+    pass_message: |-
+      {%- if url_profiles_found %}
+      The following profiles and associated categories are found in the configuration.
+      Check company practices to validate that these align with 'categories of interest' for block/override
+      {{ url_filtering_block_override }}
+      {%- else %}
+      No URL filtering profiles are currently configured
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-url-filtering-uses-the-action-of-block-or-override-on-the-url-categories
+    meta:
+      - action_required: true
+
+  # Ensure that access to every URL is logged
+  - name: capture_predefined_url_categories
+    cmd: op
+    cmd_str: <show><predefined><xpath>/predefined/pan-url-categories</xpath></predefined></show>
+    output_type: xml
+    outputs:
+      - name: predefined_url_categories
+        capture_list: /pan-url-categories/entry/@name
+
+  - name: capture_url_category_actions
+    cmd: parse
+    variable: config
+    outputs:
+      - name: url_profiles_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/url-filtering/entry
+      - name: url_profile_categories_and_allow_actions
+        capture_variable: |-
+          {%- set bad_profile_categories = dict() %}
+          {%- for item in url_profiles_object %}
+            {%- set configured_categories = [] %}
+            {%- set missing_categories = [] %}
+            {%- for action in url_profile_actions %}
+              {%- if item['entry'][action] %}
+                {%- for category in item['entry'][action]['member'] %}
+                  {%- set _ = configured_categories.append(category) %}
+                {%- endfor %}
+              {%- endif %}
+            {%- endfor %}
+            {%- for category in predefined_url_categories %}
+              {%- if category not in configured_categories %}
+              {%- set _ = missing_categories.append(category) %}
+              {%- endif %}
+            {%- endfor %}
+            {%- if missing_categories | length %}
+              {%- set _ = bad_profile_categories.update({ item['entry']['@name']: missing_categories }) %}
+            {%- endif %}
+          {%- endfor %}
+          {{ bad_profile_categories | to_json }}
+
+  - name: url_filtering_log_all_categories
+    label: Ensure that access to every URL is logged
+    test: url_profile_categories_and_allow_actions | from_json | length == 0
+    fail_message: |-
+      Profiles and respective categories causing benchmark to fail
+      {{ url_profile_categories_and_allow_actions }}
+    pass_message: |-
+      {%- if url_profiles_object %}
+      Benchmark criteria met
+      {%- else %}
+      No URL filtering profiles are currently configured
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-that-access-to-every-url-is-logged
+
+  # Ensure all HTTP Header Logging options are enabled
+  - name: capture_http_header_logging_options
+    cmd: parse
+    variable: config
+    outputs:
+      - name: url_profiles_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/url-filtering/entry
+      - name: url_profiles_with_header_logging
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/url-filtering/
+          entry[log-http-hdr-user-agent='yes' and log-http-hdr-referer='yes'
+          and log-http-hdr-xff='yes']/@name
+      - name: url_profiles_without_header_logging
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/url-filtering/
+          entry/@name
+        filter_items: item not in url_profiles_with_header_logging
+
+  - name: url_filtering_http_header_logging
+    label: Ensure all HTTP Header Logging options are enabled
+    test: url_profiles_without_header_logging | length == 0
+    fail_message: |-
+      Profiles without heading logging options enabled:
+      {{ url_profiles_without_header_logging }}
+    pass_message: |-
+      {%- if url_profiles_object %}
+      Benchmark criteria met
+      {%- else %}
+      No URL filtering profiles are currently configured
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-all-http-header-logging-options-are-enabled
+
+  # Ensure secure URL filtering is enabled for all security policies allowing traffic to the Internet
+  - name: capture_url_filtering_in_policies
+    cmd: parse
+    variable: config
+    outputs:
+      # capture for security rules using named profiles instead of a profile group
+      - name: security_rules_without_urlfiltering_profile
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow' and count(profile-setting/profiles)>0 and count(url-filtering)=0]/@name
+      # capture for security rules using profile groups
+      - name: profile_groups_without_urlfiltering
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profile-group/
+          entry[count(url-filtering)=0]/@name
+      - name: security_rules_with_group_without_urlfiltering_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow']
+        filter_items: item | element_value('profile-setting.group.member') in profile_groups_without_urlfiltering
+      - name: security_rules_with_group_without_urlfiltering_names
+        capture_expression: security_rules_with_group_without_urlfiltering_object | map(attribute="entry.@name") | list
+
+  - name: urlfiltering_profile_in_policies
+    label: Ensure secure URL filtering is enabled for all security policies allowing traffic to the Internet
+    test: |-
+      (
+        security_rules_without_urlfiltering_profile | length == 0
+        and security_rules_with_group_without_urlfiltering_names | length == 0
+      )
+    fail_message: |-
+      security policies without URL Filtering profile:
+      Using explicit profile:
+      {{ security_rules_without_urlfiltering_profile }}
+      Using profile group without a URL Filtering profile
+      {{ security_rules_with_group_without_urlfiltering_names }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-secure-url-filtering-is-enabled-for-all-security-policies-allowing-traffic-to-the-internet
+
+  # Ensure alerting after a threshold of credit card or Social Security numbers is detected is enabled
+  # requires data input for specific pattern types so flagging as action required
+  # provide contextual data of configured data patterns
+  - name: capture_data_pattern_alerting
+    cmd: parse
+    variable: config
+    outputs:
+      - name: data_pattern_names_w_cc_ss
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/
+          data-objects/entry[pattern-type/predefined/pattern/entry/@name='credit-card-numbers' or
+          pattern-type/predefined/pattern/entry/@name='social-security-numbers']/@name
+      - name: data_filtering_profile_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profiles/
+          data-filtering/entry
+        filter_items: item
+      - name: data_filtering_with_cc_or_ss
+        # iterate over all profiles and rules to see if a data-object matching a credit card or SS data patterns
+        capture_variable: |-
+          {%- set data_profiles = dict() %}
+          {%- for item in data_filtering_profile_object %}
+            {%- set entry_dict = dict() %}
+              {%- if item['entry']['rules']['entry'][1] %}
+                {%- for rule in item['entry']['rules']['entry'] %}
+                  {%- if rule['data-object'] in data_pattern_names_w_cc_ss %}
+                    {%- set _ = entry_dict.update({ 'data-pattern': rule['data-object'] }) %}
+                    {%- set _ = entry_dict.update({ 'alert-threshold': rule['alert-threshold'] }) %}
+                    {%- set _ = entry_dict.update({ 'block-threshold': rule['block-threshold'] }) %}
+                    {%- set _ = data_profiles.update({ item['entry']['@name']: entry_dict }) %}
+                  {%- endif %}
+                {%- endfor %}
+              {%- else %}
+                {%- if item['entry']['rules']['entry']['data-object'] in data_pattern_names_w_cc_ss %}
+                  {%- set _ = entry_dict.update({ data-pattern: item['entry']['rules']['entry']['data-object'] }) %}
+                  {%- set _ = entry_dict.update({ alert-threshold: item['entry']['rules']['entry']['alert-threshold'] }) %}
+                  {%- set _ = entry_dict.update({ block-threshold: item['entry']['rules']['entry']['block-threshold'] }) %}
+                  {%- set _ = data_profiles.update({ item['entry']['@name']: entry_dict }) %}
+                {%- endif %}
+              {%- endif %}
+          {%- endfor %}
+          {{ data_profiles }}
+
+  - name: data_filtering_cc_ss_numbers
+    label: Ensure alerting after a threshold of credit card or Social Security numbers is detected is enabled
+    test: true
+    pass_message: |-
+      {%- if data_filtering_profile_object %}
+      Profiles found with a credit card or Social Security number predefined pattern
+      Includes alert and block thresholds that should be non-zero
+
+      {{ data_filtering_with_cc_or_ss }}
+      {%- else %}
+      No Data Filtering profiles are currently configured
+      {%- endif %}
+
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-alerting-after-a-threshold-of-credit-card-or-social-security-numbers-is-detected-is-enabled
+    meta:
+      - action_required: true
+
+  # Ensure a secure Data Filtering profile is applied to all security policies allowing traffic to or from the Internet
+  - name: capture_data_filtering_profile_in_policies
+    cmd: parse
+    variable: config
+    outputs:
+      # capture for security rules using named profiles instead of a profile group
+      - name: security_rules_without_datafiltering_profile
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow' and count(profile-setting/profiles)>0 and count(data-filtering)=0]/@name
+      # capture for security rules using profile groups
+      - name: profile_groups_without_datafiltering
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/profile-group/
+          entry[count(data-filtering)=0]/@name
+      - name: security_rules_with_group_without_datafiltering_object
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/rulebase/security
+          /rules/entry[action='allow']
+        filter_items: item | element_value('profile-setting.group.member') in profile_groups_without_datafiltering
+      - name: security_rules_with_group_without_datafiltering_names
+        capture_expression: security_rules_with_group_without_datafiltering_object | map(attribute="entry.@name") | list
+
+  - name: datafiltering_profile_in_policies
+    label: Ensure a secure Data Filtering profile is applied to all security policies allowing traffic to or from the Internet
+    test: |-
+      (
+        security_rules_without_datafiltering_profile | length == 0
+        and security_rules_with_group_without_datafiltering_names | length == 0
+      )
+    fail_message: |-
+      security policies without Data Filtering profile:
+      Using explicit profile:
+      {{ security_rules_without_datafiltering_profile }}
+      Using profile group without a Data Filtering profile
+      {{ security_rules_with_group_without_datafiltering_names }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-a-secure-data-filtering-profile-is-applied-to-all-security-policies-allowing-
+      traffic-to-or-from-the-internet
+
+  # Ensure that User Credential Submission uses the action of “block” or “continue” on the URL categories
+
+  - name: capture_predefined_url_categories
+    cmd: op
+    cmd_str: <show><predefined><xpath>/predefined/pan-url-categories</xpath></predefined></show>
+    output_type: xml
+    outputs:
+      - name: predefined_url_categories
+        capture_list: /pan-url-categories/entry/@name
+
+  - name: capture_url_filtering_user_credential
+    cmd: parse
+    variable: config
+    outputs:
+      - name: url_filtering_profiles
+        capture_list: /config/devices/entry[@name='localhost.localdomain']/vsys/entry/profiles/url-filtering/entry
+      - name: url_filter_credential_submission
+        capture_json: |-
+          {%- set output = {'valid': True, 'profiles': {}} %}
+          {%- for profile in url_filtering_profiles %}
+
+            {# Create a list of dicts that specify profile validity #}
+            {%- set profile_name = profile['entry']['@name'] %}
+            {%- set _ = output['profiles'].update({profile_name: {'valid': True}}) %}
+
+            {# If a category is not accounted for, profile is invalid #}
+            {%- for category in predefined_url_categories %}
+              {%-
+                if category not in profile['entry']['credential-enforcement'].get('continue', {'member': []})['member']
+                and category not in profile['entry']['credential-enforcement'].get('block', {'membmer': []})['member']
+              %}
+                {%- set _ = output['profiles'][profile_name].update({'valid': False}) %}
+                {%- set _ = output.update({'valid': False}) %}
+              {%- endif %}
+            {%- endfor %}
+
+            {# Test per category parameters #}
+            {%-
+              if 'allow' in profile['entry']['credential-enforcement']
+              or 'alert' in profile['entry']['credential-enforcement']
+            %}
+                {%- set _ = output['profiles'][profile_name].update({'valid': False}) %}
+                {%- set _ = output.update({'valid': False}) %}
+            {%- endif %}
+
+          {%- endfor %}
+          {{ output | to_json }}
+
+  - name: user_cred_block_continue
+    label: Ensure that User Credential Submission uses the action of “block” or “continue” on the URL categories
+    test: url_filter_credential_submission.valid
+    fail_message: |-
+      Profiles with invalid User Credential Submission action:
+      {%- for profile in url_filter_credential_submission.profiles %}
+      {% if not url_filter_credential_submission.profiles[profile].valid %}
+        {{ profile }}
+      {% endif %}{% endfor %}
+    pass_message: |-
+      {%- if url_filtering_profiles %}
+      Benchmark criteria satisfied
+      {%- else %}
+      No configured URL Filtering profiles found
+      {%- endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-user-credential-submission-uses-the-action-of-block-or-continue-on-the-url-categories
+
+
+  # Ensure application security policies exist when allowing traffic from an untrusted zone to a more trusted zone
+  - name: capture_app_security_in_policies
+    cmd: parse
+    variable: config
+    outputs:
+      - name: any_any_policies
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry/rulebase/security/rules/entry
+          [application/member="any" and service/member="application-default" and action="allow" and not (disabled="yes")]
+      - name: port_specific_policies
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry/rulebase/security/rules/entry
+          [application/member="any" and not(service/member="application-default") and action="allow" and not(disabled="yes")]
+      - name: any_any_policies_names
+        capture_expression: any_any_policies | map(attribute="entry.@name") | list
+      - name: port_specific_policies_names
+        capture_expression: port_specific_policies | map(attribute="entry.@name") | list
+
+  - name: app_security_more_trusted_zone
+    label: Ensure application security policies exist when allowing traffic from an untrusted zone to a more trusted zone
+    test: |-
+      (
+        not any_any_policies
+        and not port_specific_policies
+      )
+    fail_message: |-
+      {% if any_any_policies_names %} The following policies permit all applications on all ports, {% for pol in any_any_policies_names %}"{{ pol }}" {% endfor %}{% endif %}
+      {% if port_specific_policies_names %} The following policies only filter based on port, {% for pol in port_specific_policies_names %}"{{ pol }}" {% endfor %}{% endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-application-security-policies-exist-when-allowing-traffic-from-an-untrusted-zone-to-a-more-trusted-zone
+
+  # Ensure 'Service setting of ANY' in a security policy allowing traffic does not exist
+  - name: capture_security_policy_any_service
+    cmd: parse
+    variable: config
+    outputs:
+      - name: service_any_policies
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry/rulebase/security/rules/entry
+          [service/member="any" and action="allow" and not(disabled="yes")]
+      - name: service_any_policies_names
+        capture_expression: service_any_policies | map(attribute="entry.@name") | list
+
+  - name: service_any_not_allowed_in_policy
+    label: Ensure 'Service setting of ANY' in a security policy allowing traffic does not exist
+    test: not service_any_policies
+    fail_message: The following policies have a service of 'any' configured, {% for pol in service_any_policies_names %}"{{ pol }}" {% endfor %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-service-setting-of-any-in-a-security-policy-allowing-traffic-does-not-exist
+
+  # Ensure 'Security Policy' denying any/all traffic to/from IP addresses on Trusted Threat Intelligence Sources Exists
+  - name: capture_license_info
+    cmd: cli
+    cmd_str: request license info
+    output_type: xml
+    outputs:
+      - name: threat_prevention
+        capture_value: ./entry[feature="Threat Prevention" and not(expired="yes")]
+
+  - name: capture_security_policy_settings
+    cmd: parse
+    variable: config
+    outputs:
+      - name: threat_prevention_inbound_policy
+        capture_object: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry/rulebase/security/rules/entry
+          [
+          position() < 3
+          and action="deny"
+          and from/member="any"
+          and to/member="any"
+          and destination/member="any"
+          and source/member="panw-known-ip-list"
+          and application/member="any"
+          and service/member="any"
+          and not(disabled="yes")
+          ]
+      - name: threat_prevention_outbound_policy
+        capture_object: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry/rulebase/security/rules/entry
+          [
+          position() < 3
+          and action="deny"
+          and from/member="any"
+          and to/member="any"
+          and destination/member="panw-known-ip-list"
+          and source/member="any"
+          and application/member="any"
+          and service/member="any"
+          and not(disabled="yes")
+          ]
+
+  - name: security_policy_deny_threat_ips
+    label: Ensure 'Security Policy' denying any/all traffic to/from IP addresses on Trusted Threat Intelligence Sources Exists
+    test: |-
+      (
+        threat_prevention_inbound_policy
+        and threat_prevention_outbound_policy
+        and threat_prevention
+      )
+    fail_message: |-
+      {%- if not threat_prevention_inbound_policy %}
+      Known malicious IP's must be blocked inbound at top of security policy for any applications on any services on any zones.
+      {%- endif %}
+      {% if not threat_prevention_outbound_policy %}
+      Known malicious IP's must be blocked outbound at top of security policy for any applications on any services on any zones.
+      {% endif %}
+      {% if not threat_prevention %}
+      Feature license "Threat Prevention" missing or expired
+      {% endif %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-security-policy-denying-any-all-traffic-to-from-ip-addresses-on-trusted-threat-intelligence-sources-exists
+

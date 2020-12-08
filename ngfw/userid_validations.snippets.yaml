@@ -1,0 +1,155 @@
+name: panos_validations_userid_settings
+label: PAN-OS validations for user ID settings
+description: PAN-OS validations for user ID settings
+type: pan_validation
+
+# User ID related configurations
+
+variables:
+
+
+
+snippets:
+
+  # Ensure that IP addresses are mapped to usernames
+  # This has been reviewed and not implemented for the initial release due to specific deployment requirements
+  - name: capture_ip_addresses_mapped_to_usernames
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: ip_addr_mapped_to_user
+    label: Ensure that IP addresses are mapped to usernames
+    test: true
+    pass_message: |-
+      This benchmark is deployment specific and a roadmap items for this validation check.
+      Review the Audit and Remediation content in the CIS Benchmark document for more information.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-that-ip-addresses-are-mapped-to-usernames
+    meta:
+      - implemented: false
+      - action_required: true
+
+  # Ensure that WMI probing is disabled
+  - name: captured_wmi_probing_disabled
+    cmd: parse
+    variable: config
+    outputs:
+      - name: userid_probing
+        capture_value: |
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/
+          user-id-collector/setting/enable-probing/text()
+
+  - name: wmi_probing_disabled
+    label: Ensure that WMI probing is disabled
+    test: userid_probing != 'yes'
+    fail_message: WMI probing is not disabled
+    pass_message: WMI probing is disabled
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-that-wmi-probing-is-disabled
+
+  # Ensure that User-ID is only enabled for internal trusted interfaces
+  # depends on sources variable cis_internal_zones to determine internal zones
+  # otherwise this variable will be empty and all zones used causing a benchmark fail
+  - name: capture_userid_enabled_zones
+    cmd: parse
+    variable: config
+    outputs:
+      - name: cis_nonInternal_zones_with_userid_list
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/zone/
+          entry[enable-user-identification='yes']/@name
+        filter_items: item not in cis_internal_zones
+
+  - name: userid_internal_zones_only
+    label: Ensure that User-ID is only enabled for internal trusted interfaces
+    test: cis_nonInternal_zones_with_userid_list | length == 0
+    fail_message: |-
+      The following zone(s) were tagged as internal:
+      {%- for zone in cis_internal_zones %}
+        {{ zone }}
+      {%- endfor %}
+
+      Yet the following non internal trusted zone(s) have userID configured:
+      {%- for zone in cis_nonInternal_zones_with_userid_list %}
+        {{ zone }}
+      {%- endfor %}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-user-id-is-only-enabled-for-internal-trusted-interfaces
+
+  # Ensure that 'Include/Exclude Networks' is used if User-ID is enabled
+  - name: capture_userid_include_exclude_networks
+    cmd: parse
+    variable: config
+    outputs:
+      - name: userID_include_exclude_networks_entries
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/
+          user-id-collector/include-exclude-network/entry/@name
+
+  - name: userid_with_include_exclude
+    label: Ensure that 'Include/Exclude Networks' is used if User-ID is enabled
+    test: userID_include_exclude_networks_entries | length
+    fail_message: Include/Exclude Networks configuration for userID not found
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-include-exclude-networks-is-used-if-user-id-is-enabled
+
+
+  # Ensure that the User-ID Agent has minimal permissions if User-ID is enabled
+  - name: userid_agent_min_permissions
+    label: Ensure that the User-ID Agent has minimal permissions if User-ID is enabled
+    test: true
+    pass_message: test cannot be implemented for PAN-OS. External system configuration elements
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-the-user-id-agent-has-minimal-permissions-if-user-id-is-enabled
+    meta:
+      - implemented: false
+      - action_requirerd: true
+
+  # Ensure that the User-ID service account does not have interactive logon rights
+  - name: userid_no_interactive_logon
+    label: Ensure that the User-ID service account does not have interactive logon rights
+    test: true
+    pass_message: test cannot be implemented for PAN-OS. External system configuration elements
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-the-user-id-service-account-does-not-have-interactive-logon-rights
+    meta:
+      - implemented: false
+      - action_requirerd: true
+
+  # Ensure remote access capabilities for the User-ID service account are forbidden
+  - name: userid_service_account
+    label: Ensure remote access capabilities for the User-ID service account are forbidden
+    test: true
+    pass_message: test cannot be implemented for PAN-OS. External system configuration elements
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-remote-access-capabilities-for-the-user-id-service-account-are-forbidden
+    meta:
+      - implemented: false
+      - action_requirerd: true
+
+  # Ensure that security policies restrict User-ID Agent traffic from crossing into untrusted zones
+  - name: capture_userid_security_policies
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: userid_agent_no_untrust_zone
+    label: Ensure that security policies restrict User-ID Agent traffic from crossing into untrusted zones
+    test: true
+    pass_message: Not part of initial release. Roadmap item to investigate
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-security-policies-restrict-user-id-agent-traffic-from-crossing-into-untrusted-zones
+    meta:
+      - implemented: false
+      - action_requirerd: true

@@ -1,0 +1,70 @@
+name: panos_validations_decryption_settings
+label: PAN-OS validations for decryption settings
+description: PAN-OS validations for decryption settings
+type: pan_validation
+
+# User ID related configurations
+
+variables:
+
+snippets:
+
+  # Ensure 'SSL Forward Proxy Policy' for traffic destined to the Internet is configured
+  # TODO: need user input of internet zones to check as destination in decrypt policies
+  - name: capture_ssl_forward_proxy_policy
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: ssl_forward_proxy_policy
+    label: Ensure 'SSL Forward Proxy Policy' for traffic destined to the Internet is configured
+    test: true
+    pass_message: This is a roadmap item requiring user input for Internet destined zones and traffic
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-ssl-forward-proxy-policy-for-traffic-destined-to-the-internet-is-configured
+    meta:
+      - implemented: false
+      - action_required: true
+
+  # Ensure 'SSL Inbound Inspection' is required for all untrusted traffic destined for servers using SSL or TLS
+  # future consideration to get user input and validate accordingly
+  - name: capture_ssl_inbound_inspection
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: ssl_inbound_inspection
+    label: Ensure 'SSL Inbound Inspection' is required for all untrusted traffic destined for servers using SSL or TLS
+    test: true
+    pass_message: Not implemented in the initial release. Requires user input for Inbound Inspection requirements.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-ssl-inbound-inspection-is-required-for-all-untrusted-traffic-destined-for-servers-using-ssl-or-tls
+    meta:
+      - implemented: false
+      - action_required: true
+
+  # Ensure that the Certificate used for Decryption is Trusted
+  # cert inspections for future investigation
+  - name: capture_decryption_certs
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: decrypt_cert_trusted
+    label: Ensure that the Certificate used for Decryption is Trusted
+    test: true
+    pass_message: Not part of initial release. Roadmap item to investigate certificate assessment.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-the-certificate-used-for-decryption-is-trusted
+    meta:
+      - implemented: false
+      - action_required: true

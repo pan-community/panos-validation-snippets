@@ -1,0 +1,620 @@
+name: panos_validations_device_settings
+label: PAN-OS validations for general device settings
+description: PAN-OS validations for general device settings
+type: pan_validation
+
+# contains checks for device hardening, operational settings, logging, user access
+
+variables:
+
+  - name: log_types
+    description: device log types for log forwarding
+    type_hint: hidden
+    # globalprotect to be added in 10.0
+    default:
+      - system
+      - config
+      - userid
+      - hipmatch
+      - iptag
+
+  - name: app_threat_intervals
+    description: interval values used for 4.2 apps threats update interval test
+    type_hint: hidden
+    default:
+      - daily
+      - hourly
+      - every-30-mins
+
+  - name: wf_file_size_limits
+    description: wildfire recommended file size limits
+    type_hint: hidden
+    default:
+      - pe: 16
+        apk: 30
+        pdf: 3072
+        ms-office: 16384
+        jar: 5
+        flash: 5
+        MacOSX: 10
+        archive: 50
+        linux: 50
+        script: 2000
+
+
+snippets:
+
+  # Syslog logging should be configured
+  # TODO: future update to include Panorama/CDL option in the checks
+  - name: capture_logging_syslog
+    cmd: parse
+    variable: config
+    outputs:
+      - name: shared_log_settings
+        capture_object: /config/shared/log-settings
+      - name: logtypes_without_syslog
+        capture_variable: |-
+          {%- set good_log_types = [] %}
+          {%- set bad_log_types = [] %}
+          {%- for logtype in shared_log_settings['log-settings'] %}
+            {%- if logtype in log_types %}
+              {%- for item in shared_log_settings['log-settings'][logtype]['match-list'] %}
+                {%- if shared_log_settings['log-settings'][logtype]['match-list'][item][1] %}
+                  {%- for entry in shared_log_settings['log-settings'][logtype]['match-list'][item] %}
+                    {%- if entry['filter'] == 'All Logs' and entry['send-syslog'] %}
+                      {%- set _ = good_log_types.append(logtype) %}
+                    {%- endif %}
+                  {%- endfor %}
+                {%- else %}
+                  {%- set itemElement = shared_log_settings['log-settings'][logtype]['match-list'][item] %}
+                  {%- if itemElement['filter'] == 'All Logs' and itemElement['send-syslog'] %}
+                    {%- set _ = good_log_types.append(logtype) %}
+                  {%- endif %}
+                {%- endif %}
+              {%- endfor %}
+            {%- endif %}
+          {%- endfor %}
+          {%- for logtype in log_types %}
+            {%- if logtype not in good_log_types %}
+              {%- set _ = bad_log_types.append(logtype) %}
+            {%- endif %}
+          {%- endfor %}
+          {{ bad_log_types | to_json }}
+
+  - name: system_logging_configured
+    label: Syslog logging should be configured
+    test: logtypes_without_syslog | from_json | length == 0
+    fail_message: |-
+      log types violating benchmark requirement:
+      {{ logtypes_without_syslog }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#syslog-logging-should-be-configured
+
+
+  # SNMPv3 traps should be configured
+  # TODO: future update to include Panorama/CDL option in the checks
+  - name: capture_logging_snmp
+    cmd: parse
+    variable: config
+    outputs:
+      - name: shared_log_settings
+        capture_object: /config/shared/log-settings
+      - name: logtypes_without_snmp
+        capture_variable: |-
+          {%- set good_log_types = [] %}
+          {%- set bad_log_types = [] %}
+          {%- for logtype in shared_log_settings['log-settings'] %}
+            {%- if logtype in log_types %}
+              {%- for item in shared_log_settings['log-settings'][logtype]['match-list'] %}
+                {%- if shared_log_settings['log-settings'][logtype]['match-list'][item][1] %}
+                  {%- for entry in shared_log_settings['log-settings'][logtype]['match-list'][item] %}
+                    {%- if entry['filter'] == 'All Logs' and entry['send-snmptrap'] %}
+                      {%- set _ = good_log_types.append(logtype) %}
+                    {%- endif %}
+                  {%- endfor %}
+                {%- else %}
+                  {%- set itemElement = shared_log_settings['log-settings'][logtype]['match-list'][item] %}
+                  {%- if itemElement['filter'] == 'All Logs' and itemElement['send-snmptrap'] %}
+                    {%- set _ = good_log_types.append(logtype) %}
+                  {%- endif %}
+                {%- endif %}
+              {%- endfor %}
+            {%- endif %}
+          {%- endfor %}
+          {%- for logtype in log_types %}
+            {%- if logtype not in good_log_types %}
+              {%- set _ = bad_log_types.append(logtype) %}
+            {%- endif %}
+          {%- endfor %}
+          {{ bad_log_types | to_json }}
+
+  - name: system_logging_configured_snmp
+    label: SNMPv3 traps should be configured
+    test: logtypes_without_snmp | from_json | length == 0
+    fail_message: |-
+      log types violating benchmark requirement:
+      {{ logtypes_without_snmp }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#snmpv3-traps-should-be-configured
+
+  # Ensure 'Login Banner' is set
+  - name: capture_login_banner
+    cmd: parse
+    variable: config
+    outputs:
+      - name: login_banner
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/login-banner
+
+  - name: login_banner_set
+    label: Ensure 'Login Banner' is set
+    test: login_banner | tag_present('login-banner')
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-login-banner-is-set
+
+
+  # Ensure 'Enable Log on High DP Load' is enabled
+  - name: capture_log_on_high_dp_load
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: enable_log_high_dp_load
+    label: Ensure 'Enable Log on High DP Load' is enabled
+    test: device_setting | element_value('management.enable-log-high-dp-load') == 'yes'
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-enable-log-on-high-dp-load-is-enabled
+
+  # Ensure 'Permitted IP Addresses' is set to those necessary for device management
+  - name: capture_perrmitted_ip_for_device_management
+    cmd: parse
+    variable: config
+    outputs:
+      - name: mgmt_permitted_ips
+        capture_list: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/permitted-ip/entry/@name
+
+  - name: permitted_ip_addresses_mgmt
+    label: Ensure 'Permitted IP Addresses' is set to those necessary for device management
+    test: mgmt_permitted_ips | length
+    fail_message: no permitted IP addresses configured for the management interface
+    pass_message: permitted IP addresses configured
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-permitted-ip-addresses-is-set-to-those-necessary-for-device-management
+
+  # Ensure 'Permitted IP Addresses' is set for all management profiles where SSH, HTTPS, or SNMP is enabled
+  - name: capture_permitted_ip_for_mgmt_profile
+    cmd: parse
+    variable: config
+    outputs:
+      - name: profile_permitted_ips
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/network/profiles/interface-management-profile
+          /entry/permitted-ip/../@name
+      - name: profile_ssh_enabled
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/network/profiles/interface-management-profile
+          /entry/ssh[text()='yes']/../@name
+      - name: profile_https_enabled
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/network/profiles/interface-management-profile
+          /entry/https[text()='yes']/../@name
+      - name: profile_snmp_enabled
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/network/profiles/interface-management-profile
+          /entry/snmp[text()='yes']/../@name
+      - name: ssh_https_snmp_enabled_profiles_no_ip_list
+        capture_expression: |
+          profile_ssh_enabled
+          + profile_https_enabled
+          + profile_snmp_enabled
+        filter_items: item not in profile_permitted_ips
+
+  - name: permitted_ip_address_mgmt_profiles
+    label: Ensure 'Permitted IP Addresses' is set for all management profiles where SSH, HTTPS, or SNMP is enabled
+    test: ssh_https_snmp_enabled_profiles_no_ip_list | length == 0
+    fail_message: |
+      network profiles failing this benchmark are
+      {%- for item in ssh_https_snmp_enabled_profiles_no_ip_list | unique %}
+      {{ item }}
+      {%- endfor %}
+    pass_message: all ssh, https, snmp enabled profiles have permitted IP addresses configured
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-permitted-ip-addresses-is-set-for-all-management-profiles-where-ssh-https-or-snmp-is-enabled
+
+  # Ensure HTTP and Telnet options are disabled for the management interface
+  - name: capture_disable_http_telnet_for_mgmt_intf
+    cmd: parse
+    variable: config
+    outputs:
+      - name: mgmt_disable_http
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/service/disable-http/text()
+      - name: mgmt_disable_telnet
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/service/disable-telnet/text()
+
+  - name: http_telnet_disabled_mgmt
+    label: Ensure HTTP and Telnet options are disabled for the management interface
+    test: |
+      (
+        mgmt_disable_http != 'no'
+        and mgmt_disable_telnet != 'no'
+      )
+    fail_message: |
+      {%- if mgmt_disable_http == 'no' %}
+        http management access is not disabled
+      {%- endif %}
+      {%- if mgmt_disable_telnet == 'no' %}
+        telnet management access is not disabled
+      {%- endif %}
+    pass_message: http and telnet are disable for management interface access
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-http-and-telnet-options-are-disabled-for-the-management-interface
+
+  # Ensure HTTP and Telnet options are disabled for all management profiles
+  - name: capture_http_telnet_mgmt_profiles
+    cmd: parse
+    variable: config
+    outputs:
+      - name: http_enabled_profiles
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/network/profiles/interface-management-profile/
+          entry/http[text()='yes']/../@name
+      - name: telnet_enabled_profiles
+        capture_list: |-
+          /config/devices/entry[@name='localhost.localdomain']/network/profiles/interface-management-profile/
+          entry/telnet[text()='yes']/../@name
+
+  - name: http_telnet_disabled_mgmt_profiles
+    label: Ensure HTTP and Telnet options are disabled for all management profiles
+    test: |
+      (
+        http_enabled_profiles | length == 0
+        and telnet_enabled_profiles | length == 0
+      )
+    fail_message: |
+      {%- if http_disabled_profiles | length %}
+        http not disabled for profiles: {{ http_enabled_profiles }}
+      {%- endif %}
+      {%- if telnet_enabled_profiles | length %}
+        telnet not disabled for profiles: {{ telnet_enabled_profiles }}
+      {%- endif %}
+    pass_message: http and telnet disabled for all management profiles
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-http-and-telnet-options-are-disabled-for-all-management-profiles
+
+  # Ensure valid certificate is set for browser-based administrator interface
+  - name: capture_valid_cert_for_ui_admin
+    cmd: parse
+    variable: config
+    outputs:
+      - name: ssl_profiles
+        capture_list: /config/shared/ssl-tls-service-profile/entry/@name
+
+  - name: valid_cert_admin_intf
+    label: Ensure valid certificate is set for browser-based administrator interface
+    test: true
+    pass_message: Not part of initial release. Roadmap item to investigate certificate assessment.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-valid-certificate-is-set-for-browser-based-administrator-interface
+    meta:
+      - implemented: false
+      - action_requirerd: true
+
+  # Ensure 'Minimum Password Complexity' is enabled
+  - name: capture_enable_min_password_complexity
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_complexity_enabled
+        capture_value: /config/mgt-config/password-complexity/enabled/text()
+
+  - name: test_password_complexity_enabled
+    label: Ensure 'Minimum Password Complexity' is enabled
+    test: password_complexity_enabled == 'yes'
+    fail_message: Minimum Password Complexity is not enabled
+    pass_message: Minimum Password Complexity is enabled
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-minimum-password-complexity-is-enabled
+
+  # Ensure 'Minimum Length' is greater than or equal to 12
+  - name: capture_password_complexity_min_length
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_length
+        capture_value: /config/mgt-config/password-complexity/minimum-length/text()
+
+  - name: test_password_min_length
+    label: Ensure 'Minimum Length' is greater than or equal to 12
+    test: password_min_length >= '12'
+    fail_message: Minimum length is set to {{ password_min_length }}
+    pass_message: Minimum length is set to {{ password_min_length }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-minimum-length-is-greater-than-or-equal-to-12
+
+  # Ensure 'Minimum Uppercase Letters' is greater than or equal to 1
+  - name: capture_password_complexity_min_uppercase
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_uppercase
+        capture_value: /config/mgt-config/password-complexity/minimum-uppercase-letters/text()
+
+  - name: test_password_min_uppercase
+    label: Ensure 'Minimum Uppercase Letters' is greater than or equal to 1
+    test: password_min_uppercase >= '1'
+    fail_message: Minimum Uppercase Letters is set to {{ password_min_length }}
+    pass_message: Minimum Uppercase Letters is set to {{ password_min_length }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-minimum-uppercase-letters-is-greater-than-or-equal-to-1
+
+  # Ensure 'Minimum Lowercase Letters' is greater than or equal to 1
+  - name: capture_password_complexity_min_lowercase
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_lowercase
+        capture_value: /config/mgt-config/password-complexity/minimum-lowercase-letters/text()
+
+  - name: test_password_min_lowercase
+    label: Ensure 'Minimum Lowercase Letters' is greater than or equal to 1
+    test: password_min_lowercase >= '1'
+    fail_message: Minimum Lowercase Letters is set to {{ password_min_lowercase }}
+    pass_message: Minimum Lowercase Letters is set to {{ password_min_lowercase }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-minimum-lowercase-letters-is-greater-than-or-equal-to-1
+
+  # Ensure 'Minimum Numeric Letters' is greater than or equal to 1
+  - name: capture_password_complexity_min_numeric
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_numeric
+        capture_value: /config/mgt-config/password-complexity/minimum-numeric-letters/text()
+
+  - name: test_password_min_numeric
+    label: Ensure 'Minimum Numeric Letters' is greater than or equal to 1
+    test: password_min_numeric >= '1'
+    fail_message: Minimum Numeric Letters is set to {{ password_min_numeric }}
+    pass_message: Minimum Numeric Letters is set to {{ password_min_numeric }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-minimum-numeric-letters-is-greater-than-or-equal-to-1
+
+  # Ensure 'Minimum Special Characters' is greater than or equal to 1
+  - name: capture_password_complexity_min_special_chars
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_special
+        capture_value: /config/mgt-config/password-complexity/minimum-special-characters/text()
+
+  - name: test_password_min_special
+    label: Ensure 'Minimum Special Characters' is greater than or equal to 1
+    test: password_min_special >= '1'
+    fail_message: Minimum Special Characters is set to {{ password_min_special }}
+    pass_message: Minimum Special Characters is set to {{ password_min_special }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-minimum-special-characters-is-greater-than-or-equal-to-1
+
+  # Ensure 'Required Password Change Period' is less than or equal to 90 days
+  - name: capture_password_complexity_change_period
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_change_period
+        capture_value: /config/mgt-config/password-complexity/password-change/expiration-period/text()
+
+  - name: test_password_min_change_period
+    label: Ensure 'Required Password Change Period' is less than or equal to 90 days
+    test: password_min_change_period > '0' and password_min_change_period <= '90'
+    fail_message: |-
+      {%- if not password_min_change_period %}
+      Required Password Change Period is not configured
+      {%- else %}
+      Required Password Change Period is set to {{ password_min_change_period }} days
+      {%- endif %}
+    pass_message: Required Password Change Period is set to {{ password_min_change_period }} days
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-required-password-change-period-is-less-than-or-equal-to-90-days
+
+  # Ensure 'New Password Differs By Characters' is greater than or equal to 3
+  - name: capture_password_complexity_new_password_differs
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_differs_by_char
+        capture_value: /config/mgt-config/password-complexity/new-password-differs-by-characters/text()
+
+  - name: test_password_differs_by_char
+    label: Ensure 'New Password Differs By Characters' is greater than or equal to 3
+    test: password_differs_by_char >= '3'
+    fail_message: New Password Differs By Characters is set to {{ password_differs_by_char }}
+    pass_message: New Password Differs By Characters is set to {{ password_differs_by_char }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-new-password-differs-by-characters-is-greater-than-or-equal-to-3
+
+  # Ensure 'Prevent Password Reuse Limit' is set to 24 or more passwords
+  - name: capture_password_complexity_reuse_limit
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_history_count
+        capture_value: /config/mgt-config/password-complexity/password-history-count/text()
+
+  - name: test_password_history_count
+    label: Ensure 'Prevent Password Reuse Limit' is set to 24 or more passwords
+    test: password_history_count >= '24'
+    fail_message: Prevent Password Reuse Limit is set to {{ password_history_count }} passwords
+    pass_message: Prevent Password Reuse Limit is set to {{ password_history_count }} passwords
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-prevent-password-reuse-limit-is-set-to-24-or-more-passwords
+
+  # Ensure 'Password Profiles' do not exist
+  - name: capture_password_profiles_do_not_exit
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_profiles
+        capture_list: /config/mgt-config/password-profile/entry/@name
+
+  - name: test_password_profiles
+    label: Ensure 'Password Profiles' do not exist
+    test: password_profiles | length == 0
+    fail_message: |
+      Password profiles {{ password_profiles }} have been configured.
+      If they are used ensure settings are stronger than the password complexity settings
+    pass_message: benchmark requirements are met. No password profiles configured.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-password-profiles-do-not-exist
+
+  # Ensure 'Idle timeout' is less than or equal to 10 minutes for device management
+  - name: capture_admin_idle_timeout
+    cmd: parse
+    variable: config
+    outputs:
+      - name: admin_idle_timeout
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting/management/idle-timeout/text()
+
+  - name: max_idle_timeout
+    label: Ensure 'Idle timeout' is less than or equal to 10 minutes for device management
+    test: admin_idle_timeout and admin_idle_timeout <= '10'
+    fail_message: |-
+      {%- if admin_idle_timeout %}
+      Idle Timeout is set to {{ admin_idle_timeout }} minutes
+      {%- else %}
+      Idle Timeout is not configured or set to default of 60 minutes
+      {%- endif %}
+    pass_message: Idle Timeout is set to {{ admin_idle_timeout }} minutes
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-idle-timeout-is-less-than-or-equal-to-10-minutes-for-device-management
+
+  # Ensure 'Failed Attempts' and 'Lockout Time' for Authentication Profile are properly configured
+  - name: capture_admin_failed_attempts_lockout
+    cmd: parse
+    variable: config
+    outputs:
+      - name: failed_attempts
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting/management/
+          admin-lockout/failed-attempts/text()
+      - name: lockout_time
+        capture_value: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting/management/
+          admin-lockout/lockout-time/text()
+
+  - name: test_failed_attempts_lockout
+    label: Ensure 'Failed Attempts' and 'Lockout Time' for Authentication Profile are properly configured
+    test: |
+      (
+      failed_attempts | length
+      and failed_attempts > '0'
+      and lockout_time | length
+      )
+    fail_message: |
+      {%- if failed_attempts | length == 0 or failed_attempts == 0 %}
+        Failed Attempts not configured or set to unlimited tries
+      {%- endif %}
+      {%- if lockout_time | length == 0 %}
+        Lockout Time is not configured
+      {%- endif %}
+    pass_message: |
+      Failed Attempts set to {{ failed_attempts }} and Lockout Time set to {{ lockout_time }}.
+      Check that these are set in accordance with company policy.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-failed-attempts-and-lockout-time-for-authentication-profile-are-properly-configured
+    meta:
+      - scored: true
+      - level: 1
+
+  # Ensure 'V3' is selected for SNMP polling
+  - name: capture_use_snmpv3_polling
+    cmd: parse
+    variable: config
+    outputs:
+      - name: snmp_version
+        capture_object: |-
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/snmp-setting/access-setting/version
+
+  - name: snmpv3_selected
+    label: Ensure 'V3' is selected for SNMP polling
+    test: snmp_version | tag_present('v3')
+    fail_message: V3 is not selected for SNMP polling
+    pass_message: V3 is selected for SNMP polling
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-v3-is-selected-for-snmp-polling
+
+  # Ensure 'Verify Update Server Identity' is enabled
+  - name: capture_verify_update_server_id_enabled
+    cmd: parse
+    variable: config
+    outputs:
+      - name: verify_server_identiy
+        capture_value: |
+          /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/server-verification/text()
+
+  - name: verify_update_service_enabled
+    label: Ensure 'Verify Update Server Identity' is enabled
+    test: verify_server_identiy != 'no'
+    fail_message: Verify Update Server Idenity is not enabled
+    pass_message: Verify Update Server Idenity is enabled
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-verify-update-server-identity-is-enabled
+
+  # Ensure redundant NTP servers are configured appropriately
+  - name: capture_redundant_ntp_servers_configured
+    cmd: parse
+    variable: config
+    outputs:
+      - name: ntp_servers
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/system/ntp-servers
+
+  - name: redundant_ntp_servers
+    label: Ensure redundant NTP servers are configured appropriately
+    test: |
+      (
+      ntp_servers | tag_present('primary-ntp-server.ntp-server-address')
+      and ntp_servers | tag_present('secondary-ntp-server.ntp-server-address')
+      )
+    fail_message: |
+      Primary and Secondary NTP servers are not configured
+    pass_message: Redundant NTP servers are configured
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-redundant-ntp-servers-are-configured-appropriately
+
+  # Ensure that the Certificate Securing Remote Access VPNs is Valid
+  - name: capture_remote_access_vpn_cert
+    cmd: parse
+    variable: config
+    outputs:
+      - name: device_setting
+        capture_object: /config/devices/entry[@name='localhost.localdomain']/deviceconfig/setting
+
+  - name: vpn_cert_valid
+    label: Ensure that the Certificate Securing Remote Access VPNs is Valid
+    test: true
+    pass_message: Not part of initial release. Roadmap item to investigate certificate assessment.
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-that-the-certificate-securing-remote-access-vpns-is-valid
+    meta:
+      - implemented: false
+      - action_requirerd: true
