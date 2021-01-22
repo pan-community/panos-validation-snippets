@@ -16,6 +16,22 @@ variables:
       - continue
       - override
 
+  - name: wf_file_size_limits
+    description: wildfire recommended file size limits
+    type_hint: hidden
+    default:
+      - pe: 16
+        apk: 30
+        pdf: 3072
+        ms-office: 16384
+        jar: 5
+        flash: 5
+        MacOSX: 10
+        archive: 50
+        linux: 50
+        script: 2000
+
+
 snippets:
 
   # Ensure 'Antivirus Update Schedule' is set to download and install updates hourly
