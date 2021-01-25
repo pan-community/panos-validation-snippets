@@ -51,8 +51,8 @@ snippets:
       ensure-that-a-zone-protection-profile-with-an-enabled-syn-flood-action-of-syn-cookies-is-attached-to-
       all-untrusted-zones
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
 
   # Ensure that a Zone Protection Profile with tuned Flood Protection settings enabled for all flood types is attached to all untrusted zones
   # partial implementation without ability to check untrust zone names
@@ -99,8 +99,8 @@ snippets:
       ensure-that-a-zone-protection-profile-with-tuned-flood-protection-settings-enabled-for-all-flood-types-
       is-attached-to-all-untrusted-zones
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
 
   # Ensure that all zones have Zone Protection Profiles with all Reconnaissance Protection settings enabled,
   # tuned, and set to appropriate actions

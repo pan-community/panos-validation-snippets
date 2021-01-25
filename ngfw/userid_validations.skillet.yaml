@@ -32,8 +32,8 @@ snippets:
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#ensure-that-ip-addresses-are-mapped-to-usernames
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
 
   # Ensure that WMI probing is disabled
   - name: captured_wmi_probing_disabled
@@ -111,8 +111,8 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-that-the-user-id-agent-has-minimal-permissions-if-user-id-is-enabled
     meta:
-      - implemented: false
-      - action_requirerd: true
+      implemented: false
+      action_required: true
 
   # Ensure that the User-ID service account does not have interactive logon rights
   - name: userid_no_interactive_logon
@@ -123,8 +123,8 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-that-the-user-id-service-account-does-not-have-interactive-logon-rights
     meta:
-      - implemented: false
-      - action_requirerd: true
+      implemented: false
+      action_required: true
 
   # Ensure remote access capabilities for the User-ID service account are forbidden
   - name: userid_service_account
@@ -135,8 +135,8 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-remote-access-capabilities-for-the-user-id-service-account-are-forbidden
     meta:
-      - implemented: false
-      - action_requirerd: true
+      implemented: false
+      action_required: true
 
   # Ensure that security policies restrict User-ID Agent traffic from crossing into untrusted zones
   - name: capture_userid_security_policies
@@ -154,5 +154,5 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-that-security-policies-restrict-user-id-agent-traffic-from-crossing-into-untrusted-zones
     meta:
-      - implemented: false
-      - action_requirerd: true
+      implemented: false
+      action_required: true

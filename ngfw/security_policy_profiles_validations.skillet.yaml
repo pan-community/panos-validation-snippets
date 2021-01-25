@@ -159,7 +159,7 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-forwarding-is-enabled-for-all-applications-and-file-types-in-wildfire-file-blocking-profiles
     meta:
-      - action_required: true
+      action_required: true
 
   # Ensure a WildFire Analysis profile is enabled for all security policies
   - name: capture_wildfire_profile_policies
@@ -556,8 +556,8 @@ snippets:
       ensure-a-vulnerability-protection-profile-is-set-to-block-attacks-against-critical-and-high-vulnerabilities
       -and-set-to-default-on-medium-low-and-informational-vulnerabilities
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
 
   # Ensure a secure Vulnerability Protection Profile is applied to all security rules allowing traffic
   - name: capture_vulnerability_profile_policies
@@ -670,7 +670,7 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-that-url-filtering-uses-the-action-of-block-or-override-on-the-url-categories
     meta:
-      - action_required: true
+      action_required: true
 
   # Ensure that access to every URL is logged
   - name: capture_predefined_url_categories
@@ -861,7 +861,7 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-alerting-after-a-threshold-of-credit-card-or-social-security-numbers-is-detected-is-enabled
     meta:
-      - action_required: true
+      action_required: true
 
   # Ensure a secure Data Filtering profile is applied to all security policies allowing traffic to or from the Internet
   - name: capture_data_filtering_profile_in_policies

@@ -304,8 +304,8 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-valid-certificate-is-set-for-browser-based-administrator-interface
     meta:
-      - implemented: false
-      - action_requirerd: true
+      implemented: false
+      action_required: true
 
   # Ensure 'Minimum Password Complexity' is enabled
   - name: capture_enable_min_password_complexity
@@ -540,9 +540,6 @@ snippets:
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-failed-attempts-and-lockout-time-for-authentication-profile-are-properly-configured
-    meta:
-      - scored: true
-      - level: 1
 
   # Ensure 'V3' is selected for SNMP polling
   - name: capture_use_snmpv3_polling
@@ -616,5 +613,5 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-that-the-certificate-securing-remote-access-vpns-is-valid
     meta:
-      - implemented: false
-      - action_requirerd: true
+      implemented: false
+      action_required: true

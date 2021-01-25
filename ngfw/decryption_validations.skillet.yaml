@@ -26,8 +26,8 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-ssl-forward-proxy-policy-for-traffic-destined-to-the-internet-is-configured
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
 
   # Ensure 'SSL Inbound Inspection' is required for all untrusted traffic destined for servers using SSL or TLS
   # future consideration to get user input and validate accordingly
@@ -46,8 +46,8 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-ssl-inbound-inspection-is-required-for-all-untrusted-traffic-destined-for-servers-using-ssl-or-tls
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
 
   # Ensure that the Certificate used for Decryption is Trusted
   # cert inspections for future investigation
@@ -66,5 +66,5 @@ snippets:
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-that-the-certificate-used-for-decryption-is-trusted
     meta:
-      - implemented: false
-      - action_required: true
+      implemented: false
+      action_required: true
