@@ -31,6 +31,14 @@ variables:
         linux: 50
         script: 2000
 
+  - name: app_threat_intervals
+    description: interval values used for 4.2 apps threats update interval test
+    type_hint: hidden
+    default:
+      - daily
+      - hourly
+      - every-30-mins
+
 
 snippets:
 
