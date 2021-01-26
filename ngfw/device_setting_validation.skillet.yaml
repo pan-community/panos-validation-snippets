@@ -334,7 +334,12 @@ snippets:
   - name: test_password_min_length
     label: Ensure 'Minimum Length' is greater than or equal to 12
     test: password_min_length >= '12'
-    fail_message: Minimum length is set to {{ password_min_length }}
+    fail_message: |-
+      {%- if not password_min_length %}
+      password minimum length is not configured
+      {%- else %}
+      minimum length is set to {{ password_min_length }}
+      {%- endif %}
     pass_message: Minimum length is set to {{ password_min_length }}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
@@ -351,8 +356,13 @@ snippets:
   - name: test_password_min_uppercase
     label: Ensure 'Minimum Uppercase Letters' is greater than or equal to 1
     test: password_min_uppercase >= '1'
-    fail_message: Minimum Uppercase Letters is set to {{ password_min_length }}
-    pass_message: Minimum Uppercase Letters is set to {{ password_min_length }}
+    fail_message: |-
+      {%- if not password_min_uppercase %}
+      password minimum uppercase is not configured
+      {%- else %}
+      minimum Uppercase Letters is set to {{ password_min_uppercase }}
+      {%- endif %}
+    pass_message: Minimum Uppercase Letters is set to {{ password_min_uppercase }}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
       ensure-minimum-uppercase-letters-is-greater-than-or-equal-to-1
@@ -368,7 +378,12 @@ snippets:
   - name: test_password_min_lowercase
     label: Ensure 'Minimum Lowercase Letters' is greater than or equal to 1
     test: password_min_lowercase >= '1'
-    fail_message: Minimum Lowercase Letters is set to {{ password_min_lowercase }}
+    fail_message: |-
+      {%- if not password_min_lowercase %}
+      password minimum lowercase is not configured
+      {%- else %}
+      minimum lowercase letters is set to {{ password_min_lowercase }}
+      {%- endif %}
     pass_message: Minimum Lowercase Letters is set to {{ password_min_lowercase }}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
@@ -385,7 +400,12 @@ snippets:
   - name: test_password_min_numeric
     label: Ensure 'Minimum Numeric Letters' is greater than or equal to 1
     test: password_min_numeric >= '1'
-    fail_message: Minimum Numeric Letters is set to {{ password_min_numeric }}
+    fail_message: |-
+      {%- if not password_min_numeric %}
+      password minimum numeric letters is not configured
+      {%- else %}
+      minimum numeric letters is set to {{ password_min_numeric }}
+      {%- endif %}
     pass_message: Minimum Numeric Letters is set to {{ password_min_numeric }}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
@@ -402,7 +422,12 @@ snippets:
   - name: test_password_min_special
     label: Ensure 'Minimum Special Characters' is greater than or equal to 1
     test: password_min_special >= '1'
-    fail_message: Minimum Special Characters is set to {{ password_min_special }}
+    fail_message: |-
+      {%- if not password_min_special %}
+      password minimum special character is not configured
+      {%- else %}
+      minimum special characters is set to {{ password_min_special }}
+      {%- endif %}
     pass_message: Minimum Special Characters is set to {{ password_min_special }}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
@@ -441,7 +466,12 @@ snippets:
   - name: test_password_differs_by_char
     label: Ensure 'New Password Differs By Characters' is greater than or equal to 3
     test: password_differs_by_char >= '3'
-    fail_message: New Password Differs By Characters is set to {{ password_differs_by_char }}
+    fail_message: |-
+      {%- if not password_differs_by_char %}
+      new password differs by characters is not configured
+      {%- else %}
+      new password differs by characters is set to {{ password_differs_by_char }}
+      {%- endif %}
     pass_message: New Password Differs By Characters is set to {{ password_differs_by_char }}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
@@ -458,7 +488,12 @@ snippets:
   - name: test_password_history_count
     label: Ensure 'Prevent Password Reuse Limit' is set to 24 or more passwords
     test: password_history_count >= '24'
-    fail_message: Prevent Password Reuse Limit is set to {{ password_history_count }} passwords
+    fail_message: |-
+      {%- if not password_history_count %}
+      Prevent Password Reuse Limit is not configured
+      {%- else %}
+      Prevent Password Reuse Limit is set to {{ password_history_count }} passwords
+      {%- endif %}
     pass_message: Prevent Password Reuse Limit is set to {{ password_history_count }} passwords
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#

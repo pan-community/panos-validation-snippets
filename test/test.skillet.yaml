@@ -1,0 +1,32 @@
+name: test_panos_validations
+label: test skillet for spot testing select validations
+description: test skillet for spot testing select validations
+type: pan_validation
+
+# contains checks for device hardening, operational settings, logging, user access
+
+variables:
+
+snippets:
+
+  # Ensure 'Minimum Length' is greater than or equal to 12
+  - name: capture_password_complexity_min_length
+    cmd: parse
+    variable: config
+    outputs:
+      - name: password_min_length
+        capture_value: /config/mgt-config/password-complexity/minimum-length/text()
+
+  - name: test_password_min_length
+    label: Ensure 'Minimum Length' is greater than or equal to 12
+    test: password_min_length >= '12'
+    fail_message: |-
+      {%- if not password_min_length %}
+      password minimum length is not configured
+      {%- else %}
+      minimum length is set to {{ password_min_length }}
+      {%- endif %}
+    pass_message: Minimum length is set to {{ password_min_length }}
+    documentation_link: |-
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
+      ensure-minimum-length-is-greater-than-or-equal-to-12
