@@ -691,24 +691,33 @@ snippets:
       - name: url_profile_categories_and_allow_actions
         capture_variable: |-
           {%- set bad_profile_categories = dict() %}
-          {%- for item in url_profiles_object %}
+
+          {#- loop across each profile to check for missing categories #}
+          {%- for profile in url_profiles_object %}
+
+            {#- create a list of configured categories in the profile #}
             {%- set configured_categories = [] %}
-            {%- set missing_categories = [] %}
             {%- for action in url_profile_actions %}
-              {%- if item['entry'][action] %}
-                {%- for category in item['entry'][action]['member'] %}
+              {%- if profile['entry'][action] %}
+                {%- for category in profile['entry'][action]['member'] %}
                   {%- set _ = configured_categories.append(category) %}
                 {%- endfor %}
               {%- endif %}
             {%- endfor %}
+
+            {#- match the list of configured to all categories to find missing members #}
+            {%- set missing_categories = [] %}
             {%- for category in predefined_url_categories %}
               {%- if category not in configured_categories %}
               {%- set _ = missing_categories.append(category) %}
               {%- endif %}
             {%- endfor %}
+
+            {#- add dict entry to profile and categories when missing categories #}
             {%- if missing_categories | length %}
-              {%- set _ = bad_profile_categories.update({ item['entry']['@name']: missing_categories }) %}
+              {%- set _ = bad_profile_categories.update({ profile['entry']['@name']: missing_categories }) %}
             {%- endif %}
+
           {%- endfor %}
           {{ bad_profile_categories | to_json }}
 
