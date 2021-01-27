@@ -7,17 +7,6 @@ type: pan_validation
 
 variables:
 
-  - name: log_types
-    description: device log types for log forwarding
-    type_hint: hidden
-    # globalprotect to be added in 10.0
-    default:
-      - system
-      - config
-      - userid
-      - hipmatch
-      - iptag
-
   - name: app_threat_intervals
     description: interval values used for 4.2 apps threats update interval test
     type_hint: hidden
