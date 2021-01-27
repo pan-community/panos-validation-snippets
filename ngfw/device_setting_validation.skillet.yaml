@@ -79,7 +79,7 @@ snippets:
 
 
   # SNMPv3 traps should be configured
-  - name: capture_logging_syslog
+  - name: capture_logging_snmp
     cmd: parse
     variable: config
     outputs:
