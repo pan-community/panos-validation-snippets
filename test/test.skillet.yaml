@@ -9,24 +9,45 @@ variables:
 
 snippets:
 
-  # Ensure 'Minimum Length' is greater than or equal to 12
-  - name: capture_password_complexity_min_length
+  - name: capture_logging_syslog
     cmd: parse
     variable: config
     outputs:
-      - name: password_min_length
-        capture_value: /config/mgt-config/password-complexity/minimum-length/text()
+      - name: shared_log_settings_system_snmptrap
+        capture_list: /config/shared/log-settings/system/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_config_snmptrap
+        capture_list: /config/shared/log-settings/config/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_userid_snmptrap
+        capture_list: /config/shared/log-settings/userid/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_hipmatch_snmptrap
+        capture_list: /config/shared/log-settings/hipmatch/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_iptag_snmptrap
+        capture_list: /config/shared/log-settings/iptag/match-list/entry[filter='All Logs' and send-snmptrap]/@name
 
-  - name: test_password_min_length
-    label: Ensure 'Minimum Length' is greater than or equal to 12
-    test: password_min_length >= '12'
+  - name: system_logging_configured_snmp
+    label: SNMPv3 traps should be configured
+    test: |-
+      shared_log_settings_system_snmptrap
+      and shared_log_settings_config_snmptrap
+      and shared_log_settings_userid_snmptrap
+      and shared_log_settings_hipmatch_snmptrap
+      and shared_log_settings_iptag_snmptrap
     fail_message: |-
-      {%- if not password_min_length %}
-      password minimum length is not configured
-      {%- else %}
-      minimum length is set to {{ password_min_length }}
+      log types violating benchmark requirement:
+      {%- if not shared_log_settings_system_snmptrap %}
+        System
       {%- endif %}
-    pass_message: Minimum length is set to {{ password_min_length }}
+      {%- if not shared_log_settings_config_snmptrap %}
+        Configuration
+      {%- endif %}
+      {%- if not shared_log_settings_userid_snmptrap %}
+        User ID
+      {%- endif %}
+      {%- if not shared_log_settings_hipmatch_snmptrap %}
+        HIP Match
+      {%- endif %}
+      {%- if not shared_log_settings_iptag_snmptrap %}
+        IP Tag
+      {%- endif %}
     documentation_link: |-
-      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#
-      ensure-minimum-length-is-greater-than-or-equal-to-12
+      https://iron-skillet.readthedocs.io/en/docs_master/cis.html#snmpv3-traps-should-be-configured

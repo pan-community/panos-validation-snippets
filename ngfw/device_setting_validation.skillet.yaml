@@ -45,95 +45,91 @@ variables:
 snippets:
 
   # Syslog logging should be configured
-  # TODO: future update to include Panorama/CDL option in the checks
   - name: capture_logging_syslog
     cmd: parse
     variable: config
     outputs:
-      - name: shared_log_settings
-        capture_object: /config/shared/log-settings
-      - name: logtypes_without_syslog
-        capture_variable: |-
-          {%- set good_log_types = [] %}
-          {%- set bad_log_types = [] %}
-          {%- for logtype in shared_log_settings['log-settings'] %}
-            {%- if logtype in log_types %}
-              {%- for item in shared_log_settings['log-settings'][logtype]['match-list'] %}
-                {%- if shared_log_settings['log-settings'][logtype]['match-list'][item][1] %}
-                  {%- for entry in shared_log_settings['log-settings'][logtype]['match-list'][item] %}
-                    {%- if entry['filter'] == 'All Logs' and entry['send-syslog'] %}
-                      {%- set _ = good_log_types.append(logtype) %}
-                    {%- endif %}
-                  {%- endfor %}
-                {%- else %}
-                  {%- set itemElement = shared_log_settings['log-settings'][logtype]['match-list'][item] %}
-                  {%- if itemElement['filter'] == 'All Logs' and itemElement['send-syslog'] %}
-                    {%- set _ = good_log_types.append(logtype) %}
-                  {%- endif %}
-                {%- endif %}
-              {%- endfor %}
-            {%- endif %}
-          {%- endfor %}
-          {%- for logtype in log_types %}
-            {%- if logtype not in good_log_types %}
-              {%- set _ = bad_log_types.append(logtype) %}
-            {%- endif %}
-          {%- endfor %}
-          {{ bad_log_types | to_json }}
+      - name: shared_log_settings_system_syslog
+        capture_list: /config/shared/log-settings/system/match-list/entry[filter='All Logs' and send-syslog]/@name
+      - name: shared_log_settings_config_syslog
+        capture_list: /config/shared/log-settings/config/match-list/entry[filter='All Logs' and send-syslog]/@name
+      - name: shared_log_settings_userid_syslog
+        capture_list: /config/shared/log-settings/userid/match-list/entry[filter='All Logs' and send-syslog]/@name
+      - name: shared_log_settings_hipmatch_syslog
+        capture_list: /config/shared/log-settings/hipmatch/match-list/entry[filter='All Logs' and send-syslog]/@name
+      - name: shared_log_settings_iptag_syslog
+        capture_list: /config/shared/log-settings/iptag/match-list/entry[filter='All Logs' and send-syslog]/@name
 
   - name: system_logging_configured
     label: Syslog logging should be configured
-    test: logtypes_without_syslog | from_json | length == 0
+    test: |-
+      shared_log_settings_system_syslog
+      and shared_log_settings_config_syslog
+      and shared_log_settings_userid_syslog
+      and shared_log_settings_hipmatch_syslog
+      and shared_log_settings_iptag_syslog
     fail_message: |-
       log types violating benchmark requirement:
-      {{ logtypes_without_syslog }}
+      {%- if not shared_log_settings_system_syslog %}
+        System
+      {%- endif %}
+      {%- if not shared_log_settings_config_syslog %}
+        Configuration
+      {%- endif %}
+      {%- if not shared_log_settings_userid_syslog %}
+        User ID
+      {%- endif %}
+      {%- if not shared_log_settings_hipmatch_syslog %}
+        HIP Match
+      {%- endif %}
+      {%- if not shared_log_settings_iptag_syslog %}
+        IP Tag
+      {%- endif %}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#syslog-logging-should-be-configured
 
 
   # SNMPv3 traps should be configured
-  # TODO: future update to include Panorama/CDL option in the checks
-  - name: capture_logging_snmp
+  - name: capture_logging_syslog
     cmd: parse
     variable: config
     outputs:
-      - name: shared_log_settings
-        capture_object: /config/shared/log-settings
-      - name: logtypes_without_snmp
-        capture_variable: |-
-          {%- set good_log_types = [] %}
-          {%- set bad_log_types = [] %}
-          {%- for logtype in shared_log_settings['log-settings'] %}
-            {%- if logtype in log_types %}
-              {%- for item in shared_log_settings['log-settings'][logtype]['match-list'] %}
-                {%- if shared_log_settings['log-settings'][logtype]['match-list'][item][1] %}
-                  {%- for entry in shared_log_settings['log-settings'][logtype]['match-list'][item] %}
-                    {%- if entry['filter'] == 'All Logs' and entry['send-snmptrap'] %}
-                      {%- set _ = good_log_types.append(logtype) %}
-                    {%- endif %}
-                  {%- endfor %}
-                {%- else %}
-                  {%- set itemElement = shared_log_settings['log-settings'][logtype]['match-list'][item] %}
-                  {%- if itemElement['filter'] == 'All Logs' and itemElement['send-snmptrap'] %}
-                    {%- set _ = good_log_types.append(logtype) %}
-                  {%- endif %}
-                {%- endif %}
-              {%- endfor %}
-            {%- endif %}
-          {%- endfor %}
-          {%- for logtype in log_types %}
-            {%- if logtype not in good_log_types %}
-              {%- set _ = bad_log_types.append(logtype) %}
-            {%- endif %}
-          {%- endfor %}
-          {{ bad_log_types | to_json }}
+      - name: shared_log_settings_system_snmptrap
+        capture_list: /config/shared/log-settings/system/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_config_snmptrap
+        capture_list: /config/shared/log-settings/config/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_userid_snmptrap
+        capture_list: /config/shared/log-settings/userid/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_hipmatch_snmptrap
+        capture_list: /config/shared/log-settings/hipmatch/match-list/entry[filter='All Logs' and send-snmptrap]/@name
+      - name: shared_log_settings_iptag_snmptrap
+        capture_list: /config/shared/log-settings/iptag/match-list/entry[filter='All Logs' and send-snmptrap]/@name
 
   - name: system_logging_configured_snmp
     label: SNMPv3 traps should be configured
-    test: logtypes_without_snmp | from_json | length == 0
+    test: |-
+      shared_log_settings_system_snmptrap
+      and shared_log_settings_config_snmptrap
+      and shared_log_settings_userid_snmptrap
+      and shared_log_settings_hipmatch_snmptrap
+      and shared_log_settings_iptag_snmptrap
     fail_message: |-
       log types violating benchmark requirement:
-      {{ logtypes_without_snmp }}
+      {%- if not shared_log_settings_system_snmptrap %}
+        System
+      {%- endif %}
+      {%- if not shared_log_settings_config_snmptrap %}
+        Configuration
+      {%- endif %}
+      {%- if not shared_log_settings_userid_snmptrap %}
+        User ID
+      {%- endif %}
+      {%- if not shared_log_settings_hipmatch_snmptrap %}
+        HIP Match
+      {%- endif %}
+      {%- if not shared_log_settings_iptag_snmptrap %}
+        IP Tag
+      {%- endif %}
     documentation_link: |-
       https://iron-skillet.readthedocs.io/en/docs_master/cis.html#snmpv3-traps-should-be-configured
 
@@ -217,7 +213,7 @@ snippets:
     fail_message: |
       network profiles failing this benchmark are
       {%- for item in ssh_https_snmp_enabled_profiles_no_ip_list | unique %}
-      {{ item }}
+        {{ item }}
       {%- endfor %}
     pass_message: all ssh, https, snmp enabled profiles have permitted IP addresses configured
     documentation_link: |-
@@ -333,7 +329,7 @@ snippets:
 
   - name: test_password_min_length
     label: Ensure 'Minimum Length' is greater than or equal to 12
-    test: password_min_length >= '12'
+    test: password_min_length | int >= 12
     fail_message: |-
       {%- if not password_min_length %}
       password minimum length is not configured
@@ -355,7 +351,7 @@ snippets:
 
   - name: test_password_min_uppercase
     label: Ensure 'Minimum Uppercase Letters' is greater than or equal to 1
-    test: password_min_uppercase >= '1'
+    test: password_min_uppercase | int >= 1
     fail_message: |-
       {%- if not password_min_uppercase %}
       password minimum uppercase is not configured
@@ -377,7 +373,7 @@ snippets:
 
   - name: test_password_min_lowercase
     label: Ensure 'Minimum Lowercase Letters' is greater than or equal to 1
-    test: password_min_lowercase >= '1'
+    test: password_min_lowercase | int >= 1
     fail_message: |-
       {%- if not password_min_lowercase %}
       password minimum lowercase is not configured
@@ -399,7 +395,7 @@ snippets:
 
   - name: test_password_min_numeric
     label: Ensure 'Minimum Numeric Letters' is greater than or equal to 1
-    test: password_min_numeric >= '1'
+    test: password_min_numeric | int >= 1
     fail_message: |-
       {%- if not password_min_numeric %}
       password minimum numeric letters is not configured
@@ -421,7 +417,7 @@ snippets:
 
   - name: test_password_min_special
     label: Ensure 'Minimum Special Characters' is greater than or equal to 1
-    test: password_min_special >= '1'
+    test: password_min_special | int >= 1
     fail_message: |-
       {%- if not password_min_special %}
       password minimum special character is not configured
@@ -443,7 +439,7 @@ snippets:
 
   - name: test_password_min_change_period
     label: Ensure 'Required Password Change Period' is less than or equal to 90 days
-    test: password_min_change_period > '0' and password_min_change_period <= '90'
+    test: password_min_change_period | int > 0 and password_min_change_period | int <= 90
     fail_message: |-
       {%- if not password_min_change_period %}
       Required Password Change Period is not configured
@@ -465,7 +461,7 @@ snippets:
 
   - name: test_password_differs_by_char
     label: Ensure 'New Password Differs By Characters' is greater than or equal to 3
-    test: password_differs_by_char >= '3'
+    test: password_differs_by_char | int >= 3
     fail_message: |-
       {%- if not password_differs_by_char %}
       new password differs by characters is not configured
@@ -487,7 +483,7 @@ snippets:
 
   - name: test_password_history_count
     label: Ensure 'Prevent Password Reuse Limit' is set to 24 or more passwords
-    test: password_history_count >= '24'
+    test: password_history_count | int >= 24
     fail_message: |-
       {%- if not password_history_count %}
       Prevent Password Reuse Limit is not configured
@@ -528,7 +524,7 @@ snippets:
 
   - name: max_idle_timeout
     label: Ensure 'Idle timeout' is less than or equal to 10 minutes for device management
-    test: admin_idle_timeout and admin_idle_timeout <= '10'
+    test: admin_idle_timeout and admin_idle_timeout | int <= 10
     fail_message: |-
       {%- if admin_idle_timeout %}
       Idle Timeout is set to {{ admin_idle_timeout }} minutes
@@ -559,7 +555,7 @@ snippets:
     test: |
       (
       failed_attempts | length
-      and failed_attempts > '0'
+      and failed_attempts | int > 0
       and lockout_time | length
       )
     fail_message: |
