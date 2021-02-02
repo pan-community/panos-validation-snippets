@@ -656,7 +656,7 @@ snippets:
           {{ profiles_block_override | to_json }}
 
   - name: url_filtering_block_or_override_test
-    label: Ensure that URL Filtering uses the action of “block” or “override” on the URL categories
+    label: Ensure that URL Filtering uses the action of 'block' or 'override' on the URL categories
     test: true
     pass_message: |-
       {%- if url_profiles_found %}
