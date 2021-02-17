@@ -962,7 +962,7 @@ snippets:
           {{ output | to_json }}
 
   - name: user_cred_block_continue
-    label: Ensure that User Credential Submission uses the action of “block” or “continue” on the URL categories
+    label: Ensure that User Credential Submission uses the action of 'block' or 'continue' on the URL categories
     test: url_filter_credential_submission.valid
     fail_message: |-
       Profiles with invalid User Credential Submission action:
